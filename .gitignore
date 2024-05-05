@@ -2,5 +2,8 @@
 .gitignore
 .prettierignore
 .prettierignore
-#dependencies
-/node_module
+# ignore ALL .log files
+*.log
+
+# ignore ALL files in ANY directory named temp
+node_modules/ 
