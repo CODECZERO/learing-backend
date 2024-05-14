@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 const userSchema = new mongoose.Schema({
     userName: {
         type: String,
@@ -48,17 +50,17 @@ userSchema.pre("save", async function (next) {
         return next
     }
     else {
-        this.password = bcrypt.hash(this.password, 10)
+        this.password = await bcrypt.hash(this.password, 10)
         next()
     }
 })
 
 //method to check encrypt password by decrtypting it 
 userSchema.methods.isPasswordCorrect = async function (password) {
-    if (password >= 8) {
+    if (password) {
         return await bcrypt.compare(password, this.password)
     }
-    else{
+    else {
         return next
     }
 }
@@ -68,7 +70,7 @@ userSchema.methods.genrateAccesToken = async function () {
     return await jwt.sign({
         _id: this._id,
         email: this.email,
-        userName: this.username,
+        userName: this.userName,
         fullName: this.fullName
     },
         process.env.ACCESS_TOKEN,
@@ -77,7 +79,7 @@ userSchema.methods.genrateAccesToken = async function () {
         })
 }
 //genrate refersh token
-userSchema.method.genrateRefershToken = async function () {
+userSchema.methods.genrateRefershToken = async function () {
     return await jwt.sign({
         _id: this._id,
     },
@@ -87,4 +89,3 @@ userSchema.method.genrateRefershToken = async function () {
         })
 }
 export const user = mongoose.model('user', userSchema);
-console.log(user);
