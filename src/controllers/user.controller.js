@@ -4,6 +4,8 @@ import { user } from "../models/user.model.js";
 import { uploadOncloud } from '../utils/fileUplode.js';
 import { apiResponse } from '../utils/apiResponse.js';
 import jwt from "jsonwebtoken";
+import { v2 as cloudinary } from 'cloudinary';
+
 
 const options = { //gobal options for cookies
     httpOnly: true,
@@ -141,11 +143,11 @@ const refershAccessToken = asyncHandler(async (req, res) => {
         if (!incomingToken) {
             throw new ApiError(401, "invalid refersh token")
         }
-    
+
         const decodeVerify = await jwt.verify(incomingToken, process.env.REFERSH_TOKEN);
-    
+
         const userFind = await user.findById(decodeVerify?._id);
-    
+
         if (!userFind) {
             throw new ApiError(400, "invalid refersh token ");
         }
@@ -153,15 +155,89 @@ const refershAccessToken = asyncHandler(async (req, res) => {
             throw new ApiError(400, "refersh token is expried")
         }
         const { genAccessToken, genRefershToken } = await generateAccessandRefershtoken(userFind._id);
-    
+
         return res.status(200).cookie("accessToken", genAccessToken, options)
             .cookie("refferToken", genRefershToken, options)
             .json(new apiResponse(200, { genAccessToken, genRefershToken }, "access token refersed successfuly"));
-    
+
     } catch (error) {
-        throw new ApiError(500,error?.message || "invalid refersh token")
+        throw new ApiError(500, error?.message || "invalid refersh token")
     }
 })
 
+const chageCurrentPassword = asyncHandler(async (req, res) => {
+    const { oldPassword, newPassword } = req.body;
+    const userFind = await user.findById(req.user?._id);
+    const passwordCheck = await user.isPasswordCorrect(oldPassword);
+    if (!passwordCheck) {
+        throw new ApiError(400, "invalid password")
+    }
 
-export { registerUser, loginUser, logout,refershAccessToken };
+    userFind.password = newPassword;
+    await userFind.save({ validateBeforeSave: false });
+
+    return res.status(200).json(new apiResponse(200, {}, "password change succesfully"));
+
+
+})
+
+const currentUser = asyncHandler(async (req, res) => {
+    return res.status(200).json(200, req.user, "current user found successfuly");
+})
+
+const updateProfile = asyncHandler(async (req, res) => {
+    const { email, fullName } = req.body;
+    if (!(email || fullName === "")) {
+        throw new ApiError(200, "Email or full name is required");
+    }
+
+    const user = await user.findByIdAndUpdate(req.user?._id, { $set: { email, fullName } }, { new: true }).select("-password -refferToken");
+    return res.status(200).json(new apiResponse(200, { user }, "user info updated"));
+})
+
+const updateProfileImage = asyncHandler(async (req, res) => {
+
+    const avtar = req.file?.avatar[0]?.path;
+    if (!avtar) {
+        throw new ApiError(400, "no image")
+    }
+
+    const avtarRef = await uploadOncloud(avtar);
+    if (!avtarRef) {
+        throw new ApiError(400, "Error while uploding image")
+    }
+
+    await cloudinary.v2.api.delete_resources([req.user?.avtar],
+        { type: 'upload', resource_type: 'image' }).then(console.log);
+
+    const userAvtar = await findByIdAndUpdate(req.user?._id, { $set: { avtar: avtarRef.url } }, { new: true }).select("-password -refferToken")
+    return res.status(200).json(new apiResponse(200,userAvtar ,"profile Update successfully"));
+})
+const updateCoverImage=asyncHandler(async (req,res)=>{
+    const coverImage = req.file?.coverImage[0]?.path;
+    if (!coverImage) {
+        throw new ApiError(400, "no image")
+    }
+
+    const coverImageRef = await uploadOncloud(coverImage);
+    if (!coverImageRef) {
+        throw new ApiError(400, "Error while uploding image")
+    }
+
+    await cloudinary.v2.api.delete_resources([req.user?.coverImage],
+        { type: 'upload', resource_type: 'image' }).then(console.log);
+
+    const userAvtar = await findByIdAndUpdate(req.user?._id, { $set: { coverImage: coverImageRef.url } }, { new: true }).select("-password -refferToken")
+    return res.status(200).json(new apiResponse(200,userAvtar ,"profile Update successfully"));
+})
+export {
+    registerUser,
+    loginUser,
+    logout,
+    refershAccessToken,
+    chageCurrentPassword,
+    currentUser,
+    updateProfile,
+    updateProfileImage,
+    updateCoverImage
+};
